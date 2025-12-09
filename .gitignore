@@ -1,0 +1,17 @@
+.bin/
+
+.env
+
+test/
+
+.claude/
+
+*.md
+
+!README.md
+
+test/
+
+bin/
+
+scripts/

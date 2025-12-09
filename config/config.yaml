@@ -1,0 +1,8 @@
+server:
+  tcp:
+    address: ":8081"  # TCP server address for ESP32 connections
+  websocket:
+    address: ":8082"  # WebSocket server address for mini-program
+
+logging:
+  level: "info"
