@@ -1,11 +1,13 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"log"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/yourusername/cojump-micro-srv/internal/hub"
 	"github.com/yourusername/cojump-micro-srv/internal/tcp"
@@ -13,8 +15,9 @@ import (
 )
 
 var (
-	tcpAddr = flag.String("tcp", ":8081", "TCP server address for ESP32")
-	wsAddr  = flag.String("ws", ":8082", "WebSocket server address for mini-program")
+	tcpAddr         = flag.String("tcp", ":8081", "TCP server address for ESP32")
+	wsAddr          = flag.String("ws", ":8082", "WebSocket server address for mini-program")
+	shutdownTimeout = flag.Duration("shutdown-timeout", 10*time.Second, "Graceful shutdown timeout")
 )
 
 func main() {
@@ -51,14 +54,24 @@ func main() {
 
 	log.Println("\nShutting down servers...")
 
-	// Graceful shutdown
+	// Create shutdown context with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), *shutdownTimeout)
+	defer cancel()
+
+	// Graceful shutdown in order:
+	// 1. Stop accepting new connections (TCP server)
+	// 2. Stop WebSocket server (allows in-flight requests to complete)
+	// 3. Stop Hub (closes all client channels)
+
 	if err := tcpServer.Stop(); err != nil {
 		log.Printf("Error stopping TCP server: %v", err)
 	}
 
-	if err := wsServer.Stop(); err != nil {
+	if err := wsServer.Stop(ctx); err != nil {
 		log.Printf("Error stopping WebSocket server: %v", err)
 	}
+
+	h.Stop()
 
 	log.Println("Servers stopped. Goodbye!")
 }

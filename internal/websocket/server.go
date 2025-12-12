@@ -1,6 +1,7 @@
 package websocket
 
 import (
+	"context"
 	"encoding/json"
 	"log"
 	"net/http"
@@ -62,9 +63,16 @@ func (s *Server) Start() error {
 	return nil
 }
 
-// Stop stops the WebSocket server
-func (s *Server) Stop() error {
-	return s.server.Close()
+// Stop stops the WebSocket server gracefully
+func (s *Server) Stop(ctx context.Context) error {
+	log.Println("Shutting down WebSocket server...")
+	if err := s.server.Shutdown(ctx); err != nil {
+		// Force close if graceful shutdown fails
+		s.server.Close()
+		return err
+	}
+	log.Println("WebSocket server stopped")
+	return nil
 }
 
 // handleHealth handles health check requests

@@ -36,6 +36,9 @@ type Hub struct {
 	// Communication channels
 	broadcastEMG chan *model.EMGData
 
+	// Shutdown
+	done chan struct{}
+
 	mu sync.RWMutex
 }
 
@@ -49,6 +52,7 @@ func NewHub() *Hub {
 		registerDev:   make(chan *ESP32Device),
 		unregisterDev: make(chan string),
 		broadcastEMG:  make(chan *model.EMGData, 256),
+		done:          make(chan struct{}),
 	}
 }
 
@@ -56,6 +60,17 @@ func NewHub() *Hub {
 func (h *Hub) Run() {
 	for {
 		select {
+		case <-h.done:
+			// Close all client channels
+			h.mu.Lock()
+			for client := range h.clients {
+				close(client.Send)
+				delete(h.clients, client)
+			}
+			h.mu.Unlock()
+			log.Println("Hub stopped")
+			return
+
 		// WebSocket client registration
 		case client := <-h.register:
 			h.mu.Lock()
@@ -137,8 +152,15 @@ func (h *Hub) UnregisterDevice(deviceID string) {
 }
 
 // BroadcastEMG sends EMG data to all connected WebSocket clients
+// 非阻塞模式：如果 channel 满了就丢弃数据，避免阻塞 TCP 读取
 func (h *Hub) BroadcastEMG(data *model.EMGData) {
-	h.broadcastEMG <- data
+	select {
+	case h.broadcastEMG <- data:
+		// 成功发送
+	default:
+		// channel 满了，丢弃数据但不阻塞
+		log.Println("WARNING: broadcastEMG channel full, dropping EMG data")
+	}
 }
 
 // GetClientCount returns the number of connected WebSocket clients
@@ -153,4 +175,9 @@ func (h *Hub) GetDeviceCount() int {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 	return len(h.devices)
+}
+
+// Stop gracefully stops the hub
+func (h *Hub) Stop() {
+	close(h.done)
 }

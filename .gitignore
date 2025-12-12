@@ -12,6 +12,6 @@ test/
 
 test/
 
-bin/
+# bin/
 
 scripts/
